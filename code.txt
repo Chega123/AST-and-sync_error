@@ -1,0 +1,57 @@
+/* Declaracion de
+  Variables */
+int x;  // IntType Identifier ;
+int[] arr = "a";  // IntType [ ] Identifier = CharLiteral ;
+char[][][] cube;  // CharType [ ] [ ] [ ] Identifier ;
+void[][][] data = a + 5; 
+
+/* Asignaciones */
+int x = 10;         // Asignación a variable entera.
+bool b = true;
+string s = "hola mundo!";
+
+/* Expresiones
+  Aritmeticas */
+
+int z = x + 5 - 3 * 2;
+int z = (4 + y) / 2;
+
+/* Expresiones
+  Relacionales */
+
+bool a = x < 10;
+bool b = y >= z;
+bool c = z == 5;
+
+/* Expresiones
+  Booleanas */
+bool a = true && false;        // AND lógico.
+bool b = x < 5 || y > 10;      // OR lógico con relacionales.
+bool c = (x == 3);            // Negación lógica.
+
+/* Otros 
+  Statements */
+
+[bool Respuesta (){
+if (y < 10){print("Both conditions met.");}
+else {return true;}
+}]
+
+[bool Respuesta (){
+if (y < 10){print("Both conditions met.");{if (x == 1){return false;} } }
+else { int x = 0; return true;}
+}]
+[void MiFuncion() {
+    int i;
+    for (i = 0; i < 10; i = i + 1;) {
+        print("Reached middle.");
+
+        if (i == 5) { // test comment
+            print("Reached middle.");
+            int x = chega("hola" 1 2 3 );
+            int y = -- 1;
+        }
+    }
+}]
+
+            int x = chega("hola");
