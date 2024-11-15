@@ -10,18 +10,21 @@ string fallo = "vacio";
 int token_num = 0;
 
 
-void printAST(const unique_ptr<ASTNode>& node, int level = 0) {
-    if (!node) return; 
-    cout << string(level * 2, ' ') << "[" << level << "] " << node->token_name << endl;
-    for (size_t i = 0; i < node->children.size(); ++i) {
-        printAST(node->children[i], level + 1);
+void printAST(const ASTNode& node, int level = 0) {
+    // Imprime el nombre del nodo junto con su nivel
+    cout << string(level * 2, ' ') << "[" << level << "] " << node.token_name << endl;
+
+    // Recurre sobre los hijos del nodo
+    for (const auto& child : node.children) {
+        printAST(child, level + 1);
     }
 }
+
 
 Parser::Parser(const vector<token>& tokens) : tokens(tokens), current(0) {
 }
 
-bool Parser::parse(unique_ptr<ASTNode>& root) {
+bool Parser::parse(ASTNode& root) {
     bool success = Program(root);
     if (errorCount > 0) {
         cerr << "Parsing completed with " << errorCount << " errors." << endl;
@@ -32,17 +35,17 @@ bool Parser::parse(unique_ptr<ASTNode>& root) {
 }
 
 token Parser::currToken() {
-  return tokens[current];
+    return tokens[current];
 }
 
 token Parser::nextToken() {
-  return tokens[current++];
+    return tokens[current++];
 }
 
 void Parser::fail(string message) {
-   // cerr << "Error at token " << current << ": " << message << endl;
-    if (fallo == "vacio") { fallo = message; token_num = current;}
-    
+    // cerr << "Error at token " << current << ": " << message << endl;
+    if (fallo == "vacio") { fallo = message; token_num = current; }
+
 }
 
 void Parser::syncToDelimiter() {
@@ -58,25 +61,28 @@ void Parser::syncToDelimiter() {
 }
 
 bool Parser::nonTerminal(string name) {
-  if (currToken().token_name == name) {
-    nextToken();
-    return true;
-  }
-  return false;
+    if (currToken().token_name == name) {
+        nextToken();
+        return true;
+    }
+    return false;
 }
 
 /*
   Type' -> [ ] Type'
   Type' -> ε
 */
-bool Parser::TypePrime(unique_ptr<ASTNode>& node) {
-    // Si encontramos '[ ]', creamos un nodo 'Array' y continuamos
-    if (nonTerminal("TOKEN_[") && nonTerminal("TOKEN_]")) {
-        node = make_unique<ASTNode>("Array");
-        return TypePrime(node);  // Llamada recursiva para manejar más niveles de arreglo
+bool Parser::TypePrime(ASTNode& node) {
+    if (nonTerminal("TOKEN_[")) {
+        ASTNode arrayNode("Array");
+        if (nonTerminal("TOKEN_]") && TypePrime(arrayNode)) {
+            node.addChild(arrayNode); // Añadimos el nodo Array
+        }
+        return true;
     }
-    return true;  // Caso epsilon, sin nodos adicionales
+    return true; // Caso ε, sin nodos adicionales
 }
+
 
 
 /*
@@ -86,32 +92,31 @@ bool Parser::TypePrime(unique_ptr<ASTNode>& node) {
   BasicType -> StringType
   BasicType -> VoidType
 */
-bool Parser::BasicType(unique_ptr<ASTNode>& node) {
-    string name_temp = currToken().token_name;
-    if (nonTerminal("TOKEN_IntType") || nonTerminal("TOKEN_BoolType") || 
-        nonTerminal("TOKEN_CharType") || nonTerminal("TOKEN_StringType") || 
+bool Parser::BasicType(ASTNode& node) {
+    std::string name_temp = currToken().token_name;
+    if (nonTerminal("TOKEN_IntType") || nonTerminal("TOKEN_BoolType") ||
+        nonTerminal("TOKEN_CharType") || nonTerminal("TOKEN_StringType") ||
         nonTerminal("TOKEN_VoidType")) {
-        node=make_unique<ASTNode>(name_temp);
+        node = ASTNode(name_temp);
         return true;
     }
-    fail("Tipo básico no valido");
-    return false ;
+    fail("Tipo básico no válido");
+    return false;
 }
+
 
 /*
   Type->BasicType Type'
 */
-bool Parser::Type(unique_ptr<ASTNode>& node) {
-    unique_ptr<ASTNode> basicTypeNode;
-    unique_ptr<ASTNode> typePrimeNode;
-    
+bool Parser::Type(ASTNode& node) {
+    ASTNode basicTypeNode;
     if (BasicType(basicTypeNode)) {
-        node = make_unique<ASTNode>("Type");
-        node->addChild(move(basicTypeNode));
+        node = ASTNode("Type");
+        node.addChild(basicTypeNode);
 
-        // Llamamos a TypePrime y solo lo añadimos si contiene algo (es un arreglo)
-        if (TypePrime(typePrimeNode) && typePrimeNode) {
-            node->addChild(move(typePrimeNode));
+        ASTNode typePrimeNode;
+        if (TypePrime(typePrimeNode) && !typePrimeNode.children.empty()) {
+            node.addChild(typePrimeNode);
         }
         return true;
     }
@@ -121,55 +126,53 @@ bool Parser::Type(unique_ptr<ASTNode>& node) {
 
 
 
+
 /*
   Function -> Type Identifier (Params) { StmtList }
 */
-bool Parser::Function(unique_ptr<ASTNode>& node) {
-    node = make_unique<ASTNode>("Function");
+bool Parser::Function(ASTNode& node) {
+    node = ASTNode("Function");
 
-    unique_ptr<ASTNode> typeNode;
-    unique_ptr<ASTNode> paramsNode;
-    unique_ptr<ASTNode> compoStmt;
-
+    ASTNode typeNode, paramsNode, compoStmt;
     if (Type(typeNode) &&
-        nonTerminal("TOKEN_ID") && 
-        nonTerminal("TOKEN_(") && 
-        Params(paramsNode) &&
-        nonTerminal("TOKEN_)") && 
-        CompoundStmt(compoStmt)) {
+        nonTerminal("TOKEN_ID")) {
 
-        node->addChild(move(typeNode));
-        // Crear un nodo para el identificador con el nombre específico de la función
-        node->addChild(make_unique<ASTNode>("Identifier"));
-        node->addChild(move(paramsNode));
-        node->addChild(move(compoStmt));
-        return true;
+        std::string functionName = currToken().token_name;
+        ASTNode identifierNode("Identifier");
+        identifierNode.addChild(ASTNode(functionName));
+
+        if (nonTerminal("TOKEN_(") && Params(paramsNode) &&
+            nonTerminal("TOKEN_)") && CompoundStmt(compoStmt)) {
+
+            node.addChild(typeNode);
+            node.addChild(identifierNode);
+            node.addChild(paramsNode);
+            node.addChild(compoStmt);
+            return true;
+        }
     }
     fail("Función mal declarada");
     return false;
 }
 
 
+
 /*
   VarDecl' -> ;
   VarDecl' -> = Expression ;
 */
-bool Parser::VarDeclPrime(unique_ptr<ASTNode>& node, unique_ptr<ASTNode> identifierNode) {
-    unique_ptr<ASTNode> exprNode;
+bool Parser::VarDeclPrime(ASTNode& node, ASTNode identifierNode) {
+    ASTNode exprNode;
 
-    // Caso: Simple declaración de variable con ';'
     if (nonTerminal("TOKEN_;")) {
-        node = make_unique<ASTNode>("VarDecl");
-        node->addChild(move(identifierNode));
-        node->addChild(make_unique<ASTNode>(";"));
+        node = ASTNode("VarDecl");
+        node.addChild(identifierNode);
         return true;
     }
-    // Caso: Declaración con asignación (VarDecl -> Type Identifier '=' Expression ';')
     else if (nonTerminal("TOKEN_=") && Expression(exprNode) && nonTerminal("TOKEN_;")) {
-        node = make_unique<ASTNode>("=");  // Nodo '=' como raíz de la asignación
-        node->addChild(move(identifierNode));  // Agregar el identificador como hijo
-        node->addChild(move(exprNode));  // Agregar la expresión como otro hijo
-        node->addChild(make_unique<ASTNode>(";"));
+        node = ASTNode("=");
+        node.addChild(identifierNode);
+        node.addChild(exprNode);
         return true;
     }
 
@@ -179,76 +182,74 @@ bool Parser::VarDeclPrime(unique_ptr<ASTNode>& node, unique_ptr<ASTNode> identif
 
 
 
+
 /*
   VarDecl -> Type Identifier VarDecl'
 */
-bool Parser::VarDecl(unique_ptr<ASTNode>& node) {
-    unique_ptr<ASTNode> typeNode;
-    unique_ptr<ASTNode> varDeclPrimeNode;
-
+bool Parser::VarDecl(ASTNode& node) {
+    ASTNode typeNode;
     if (Type(typeNode) && nonTerminal("TOKEN_ID")) {
-        // Crear un nodo para el identificador
-        auto identifierNode = make_unique<ASTNode>("Identifier");
+        ASTNode identifierNode("Identifier");
+        identifierNode.addChild(ASTNode(currToken().token_name));
 
-        // Llamar a VarDeclPrime con el identificador
-        if (VarDeclPrime(varDeclPrimeNode, move(identifierNode))) {
-            node = make_unique<ASTNode>("VarDecl");
-            node->addChild(move(typeNode));
-            node->addChild(move(varDeclPrimeNode));
+        ASTNode varDeclPrimeNode;
+        if (VarDeclPrime(varDeclPrimeNode, identifierNode)) {
+            node = ASTNode("VarDecl");
+            node.addChild(typeNode);
+            node.addChild(varDeclPrimeNode);
             return true;
         }
     }
 
-    fail("Error en declaración de variable: se esperaba un identificador o un punto y coma");
+    fail("Error en declaración de variable");
     return false;
 }
+
 
 
 /*
   Declaration -> [ Function ]
   Declaration -> VarDecl
 */
-bool Parser::Declaration(unique_ptr<ASTNode>& node) {
-    unique_ptr<ASTNode> functionNode;
-    unique_ptr<ASTNode> varDeclNode;
+bool Parser::Declaration(ASTNode& node) {
+    ASTNode functionNode, varDeclNode;
 
     if (nonTerminal("TOKEN_[") && Function(functionNode) && nonTerminal("TOKEN_]")) {
-        node->addChild(make_unique<ASTNode>("[")); 
-        node->addChild(move(functionNode));
-        node->addChild(make_unique<ASTNode>("]"));
+        node = ASTNode("FunctionDeclaration");
+        node.addChild(functionNode);
         return true;
-    } else if (VarDecl(varDeclNode)) {
-        node->addChild(move(varDeclNode));
+    }
+    else if (VarDecl(varDeclNode)) {
+        node = ASTNode("VarDeclaration");
+        node.addChild(varDeclNode);
         return true;
     }
 
-    fail("Error en declaracion: se esperaba una función o declaracion de variable");
+    fail("Error en declaración");
     return false;
 }
+
 
 /*
   Program' -> Declaration Program'
   Program' -> ε
 */
-bool Parser::ProgramPrime(unique_ptr<ASTNode>& node) {
+bool Parser::ProgramPrime(ASTNode& node) {
     if (current >= tokens.size()) {
-        return true; 
+        return true;
     }
 
-    unique_ptr<ASTNode> declNode;
-
-    // Si hay una declaración, la añadimos directamente al nodo Program
+    ASTNode declNode;
     if (Declaration(declNode)) {
-        node->addChild(std::move(declNode));
-        return ProgramPrime(node);  // Continuamos con la siguiente declaración
-    } else {
-        // En caso de error en la declaración, sincronizar para evitar fallos consecutivos
-        fail("Fallo al parsear Declaration");
+        node.addChild(declNode);
+        return ProgramPrime(node);
+    }
+    else {
+        fail("Error en declaración");
         errorCount++;
         cerr << "Error en el token " << token_num << ": " << fallo << endl;
-        syncToDelimiter();  
-        fallo = "vacio";
-        return ProgramPrime(node);  // Intentar continuar con la siguiente declaración
+        syncToDelimiter();
+        return ProgramPrime(node);
     }
 }
 
@@ -256,17 +257,18 @@ bool Parser::ProgramPrime(unique_ptr<ASTNode>& node) {
 /*
   Program -> Declaration Program'
 */
-bool Parser::Program(unique_ptr<ASTNode>& root) {
-    root = make_unique<ASTNode>("Program");
+bool Parser::Program(ASTNode& root) {
+    root = ASTNode("Program");
 
-    unique_ptr<ASTNode> declarationNode;
-    if (Declaration(declarationNode) && ProgramPrime(root)) {
-        root->addChild(move(declarationNode)); // Mueve la declaración al nodo root de Program
-        return true;
+    ASTNode declarationNode;
+    if (Declaration(declarationNode)) {
+        root.addChild(declarationNode);
+        return ProgramPrime(root);
     }
-    fail("Error en el programa: inicio no valido");
+    fail("Error en el programa");
     return false;
 }
+
 
 ////////////////////////////////////////////////////////////
 
@@ -274,173 +276,166 @@ bool Parser::Program(unique_ptr<ASTNode>& root) {
   Params -> ParamList
   Params -> ε
 */
-bool Parser::Params(unique_ptr<ASTNode>& node) {
-    node = make_unique<ASTNode>("Params");
-    unique_ptr<ASTNode> paramListNode;
+bool Parser::Params(ASTNode& node) {
+    ASTNode paramListNode;
     if (ParamList(paramListNode)) {
-        node->addChild(std::move(paramListNode));
-        return true;
+        node = ASTNode("Params");
+        node.addChild(std::move(paramListNode));
     }
-    return true;
+    return true;  // Caso ε (sin parámetros)
 }
+
+
 
 /*
   ParamList -> Type Identifier ParamList'
 */
-bool Parser::ParamList(unique_ptr<ASTNode>& node) {
-    node = make_unique<ASTNode>("ParamList");
+bool Parser::ParamList(ASTNode& node) {
+    node = ASTNode("ParamList");
 
-    unique_ptr<ASTNode> typeNode;
-    unique_ptr<ASTNode> paramListPrimeNode;
-    if (Type(typeNode) && nonTerminal("TOKEN_ID") && ParamListPrime(paramListPrimeNode)) {
-        node->addChild(std::move(typeNode));
-        node->addChild(make_unique<ASTNode>("TOKEN_ID")); 
-        node->addChild(std::move(paramListPrimeNode));
+    ASTNode typeNode;
+    if (Type(typeNode) && nonTerminal("TOKEN_ID")) {
+        node.addChild(std::move(typeNode));
+        node.addChild(ASTNode("Identifier"));  // Nodo para el identificador
+
+        // Procesar más parámetros si están presentes
+        while (nonTerminal("TOKEN_,") && Type(typeNode) && nonTerminal("TOKEN_ID")) {
+            node.addChild(std::move(typeNode));
+            node.addChild(ASTNode("Identifier"));
+        }
         return true;
     }
     fail("Error en lista de parámetros: se esperaba tipo e identificador");
     return false;
 }
 
+
+
 /*
   ParamList' -> , Type Identifier ParamList'
   ParamList' -> ε
 */
-bool Parser::ParamListPrime(unique_ptr<ASTNode>& node) {
-    node = make_unique<ASTNode>("ParamListPrime");
-
-    unique_ptr<ASTNode> typeNode;
-    unique_ptr<ASTNode> paramListPrimeNode;
-    if (nonTerminal("TOKEN_,") && Type(typeNode) && nonTerminal("TOKEN_ID") && ParamListPrime(paramListPrimeNode)) {
-        node->addChild(make_unique<ASTNode>(",")); 
-        node->addChild(std::move(typeNode));
-        node->addChild(make_unique<ASTNode>("TOKEN_ID"));
-        node->addChild(std::move(paramListPrimeNode));
-        return true;
+bool Parser::ParamListPrime(ASTNode& node) {
+    ASTNode typeNode;
+    while (nonTerminal("TOKEN_,") && Type(typeNode) && nonTerminal("TOKEN_ID")) {
+        node.addChild(std::move(typeNode));
+        node.addChild(ASTNode("Identifier"));
+        typeNode = ASTNode();  // Reiniciar para el próximo parámetro
     }
-    return true;
+    return true;  // Devuelve true si se procesaron todos los parámetros adicionales
 }
+
 
 /*
   StmtList -> Statement StmtList'
 */
-bool Parser::StmtList(unique_ptr<ASTNode>& node) {
-    node = make_unique<ASTNode>("StmtList");
+bool Parser::StmtList(ASTNode& node) {
+    node = ASTNode("StmtList");
 
-    unique_ptr<ASTNode> stmtNode;
-    unique_ptr<ASTNode> stmtListPrimeNode;
-    if (Statement(stmtNode) && StmtListPrime(stmtListPrimeNode)) {
-        node->addChild(std::move(stmtNode));
-        node->addChild(std::move(stmtListPrimeNode));
-        return true;
+    ASTNode stmtNode;
+    while (Statement(stmtNode)) {
+        node.addChild(std::move(stmtNode));
+        stmtNode = ASTNode();  // Reiniciar para la siguiente sentencia
     }
-    fail("Error en lista de sentencias: sentencia no válida");
-    return false;
+    return true;
 }
+
 
 /*
   StmtList' -> Statement StmtList'
   StmtList' -> ε
 */
-bool Parser::StmtListPrime(unique_ptr<ASTNode>& node) {
-    node = make_unique<ASTNode>("StmtListPrime");
-
-    unique_ptr<ASTNode> stmtNode;
-    unique_ptr<ASTNode> stmtListPrimeNode;
-    if (Statement(stmtNode) && StmtListPrime(stmtListPrimeNode)) {
-        node->addChild(std::move(stmtNode));
-        node->addChild(std::move(stmtListPrimeNode));
-        return true;
+bool Parser::StmtListPrime(ASTNode& node) {
+    ASTNode stmtNode;
+    while (Statement(stmtNode)) {
+        node.addChild(std::move(stmtNode));
+        stmtNode = ASTNode();  // Reiniciar para la próxima sentencia
     }
     return true;
 }
 
+
 /*
   CompoundStmt -> { StmtList }
 */
-bool Parser::CompoundStmt(unique_ptr<ASTNode>& node) {
-    node = make_unique<ASTNode>("CompoundStmt");
+bool Parser::CompoundStmt(ASTNode& node) {
+    node = ASTNode("CompoundStmt");
 
-    unique_ptr<ASTNode> stmtListNode;
+    ASTNode stmtListNode;
     if (nonTerminal("TOKEN_{") && StmtList(stmtListNode) && nonTerminal("TOKEN_}")) {
-        node->addChild(make_unique<ASTNode>("{")); 
-        node->addChild(std::move(stmtListNode));
-        node->addChild(make_unique<ASTNode>("}"));
+        node.addChild(std::move(stmtListNode));
         return true;
     }
     fail("Error en bloque de sentencias: se esperaba '{' o '}'");
     return false;
 }
 
+
 /*
 ExprStmt ::= Expression ;
 ExprStmt ::= ;
 */
-bool Parser::ExprStmt(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("ExprStmt");
+bool Parser::ExprStmt(ASTNode& node) {
+    node = ASTNode("ExprStmt");
 
-    unique_ptr<ASTNode> exprNode;
-    if(Expression(exprNode)&& nonTerminal("TOKEN_;")){
-        node->addChild(std::move(exprNode));
-        node->addChild(make_unique<ASTNode>(";"));
+    ASTNode exprNode;
+    if (Expression(exprNode)) {
+        node.addChild(std::move(exprNode));
+    }
+    if (nonTerminal("TOKEN_;")) {
         return true;
     }
-    else if(nonTerminal("TOKEN_;")){
-        node->addChild(make_unique<ASTNode>(";"));
-        return true;
-    }
-    fail("Error en sentencia de expresion: falta punto y coma");
+
+    fail("Error en sentencia de expresión: falta punto y coma");
     return false;
 }
+
 
 /*
 PrintStmt -> print ( ExprList ) ;
 */
-bool Parser::PrintStmt(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("PrintStmt");
+bool Parser::PrintStmt(ASTNode& node) {
+    node = ASTNode("PrintStmt");
 
-    unique_ptr<ASTNode> exprListNode;
-    if (nonTerminal("TOKEN_print")&&
-        nonTerminal("TOKEN_(")&&
-        ExprList(exprListNode)&&
-        nonTerminal("TOKEN_)")&&
-        nonTerminal("TOKEN_;")){
-        node->addChild(make_unique<ASTNode>("print"));
-        node->addChild(make_unique<ASTNode>("("));
-        node->addChild(std::move(exprListNode));
-        node->addChild(make_unique<ASTNode>(")"));
-        node->addChild(make_unique<ASTNode>(";"));
+    ASTNode exprListNode;
+    if (nonTerminal("TOKEN_print") &&
+        nonTerminal("TOKEN_(") &&
+        ExprList(exprListNode) &&
+        nonTerminal("TOKEN_)") &&
+        nonTerminal("TOKEN_;")) {
+        node.addChild(std::move(exprListNode));
         return true;
     }
     fail("Error en sentencia de impresión: se esperaba '(' o ')'");
     return false;
 }
 
+
 /*
 ReturnStmt -> return Expression ;
 */
-bool Parser::ReturnStmt(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("ReturnStmt");
-    unique_ptr<ASTNode> exprNode;
-    if (nonTerminal("TOKEN_return")&&
-        Expression(exprNode)&&
-        nonTerminal("TOKEN_;")){
-        node->addChild(make_unique<ASTNode>("return"));
-        node->addChild(std::move(exprNode));
-        node->addChild(make_unique<ASTNode>(";"));
+bool Parser::ReturnStmt(ASTNode& node) {
+    node = ASTNode("ReturnStmt");
+
+    ASTNode exprNode;
+    if (nonTerminal("TOKEN_return") &&
+        Expression(exprNode) &&
+        nonTerminal("TOKEN_;")) {
+        node.addChild(std::move(exprNode));
         return true;
     }
-    fail("Error en sentencia de retorno: falta expresion o punto y coma");
+    fail("Error en sentencia de retorno: falta expresión o punto y coma");
     return false;
 }
+
 
 /*
 ForStmt -> for ( ExprStmt Expression ; ) Statement
 */
-bool Parser::ForStmt(unique_ptr<ASTNode>& node) {
-    node = make_unique<ASTNode>("ForStmt");
+bool Parser::ForStmt(ASTNode& node) {
+    node = ASTNode("ForStmt");
 
-    unique_ptr<ASTNode> exprStmt1, exprStmt2, exprStmt3, stmtNode; // me acorde que podia hacer esto pero ya me da flojera cambiar los de arriba
+    ASTNode exprStmt1, exprStmt2, exprStmt3, stmtNode;
     if (nonTerminal("TOKEN_for") &&
         nonTerminal("TOKEN_(") &&
         ExprStmt(exprStmt1) &&
@@ -448,46 +443,42 @@ bool Parser::ForStmt(unique_ptr<ASTNode>& node) {
         ExprStmt(exprStmt3) &&
         nonTerminal("TOKEN_)") &&
         Statement(stmtNode)) {
-        node->addChild(make_unique<ASTNode>("for"));
-        node->addChild(make_unique<ASTNode>("("));
-        node->addChild(std::move(exprStmt1));
-        node->addChild(std::move(exprStmt2));
-        node->addChild(std::move(exprStmt3));
-        node->addChild(make_unique<ASTNode>(")"));
-        node->addChild(std::move(stmtNode));
+        node.addChild(std::move(exprStmt1));
+        node.addChild(std::move(exprStmt2));
+        node.addChild(std::move(exprStmt3));
+        node.addChild(std::move(stmtNode));
         return true;
     }
     fail("Error en sentencia for: se esperaba ';' o ')'");
     return false;
 }
+
 /*
 AuxIf -> else {Statement}
 AuxIf -> ‘’
 */
-bool Parser::AuxIf(unique_ptr<ASTNode>& node) {
-    node = make_unique<ASTNode>("AuxIf");
+bool Parser::AuxIf(ASTNode& node) {
+    node = ASTNode("else");
 
-    unique_ptr<ASTNode> stmtListNode;
+    ASTNode stmtListNode;
     if (nonTerminal("TOKEN_else") &&
         nonTerminal("TOKEN_{") &&
         StmtList(stmtListNode) &&
         nonTerminal("TOKEN_}")) {
-        node->addChild(make_unique<ASTNode>("else"));
-        node->addChild(make_unique<ASTNode>("{"));
-        node->addChild(std::move(stmtListNode));
-        node->addChild(make_unique<ASTNode>("}"));
+        node.addChild(std::move(stmtListNode));
         return true;
     }
-    return true;
+    return true;  // Caso ε, sin nodo adicional
 }
+
 
 /*
 IfStmt -> if ( Expression ) {Statement} AuxIf
 */
-bool Parser::IfStmt(unique_ptr<ASTNode>& node) {
-    node = make_unique<ASTNode>("IfStmt");
+bool Parser::IfStmt(ASTNode& node) {
+    node = ASTNode("IfStmt");
 
-    unique_ptr<ASTNode> exprNode, stmtListNode, auxIfNode;
+    ASTNode exprNode, stmtListNode, auxIfNode;
     if (nonTerminal("TOKEN_if") &&
         nonTerminal("TOKEN_(") &&
         Expression(exprNode) &&
@@ -496,19 +487,18 @@ bool Parser::IfStmt(unique_ptr<ASTNode>& node) {
         StmtList(stmtListNode) &&
         nonTerminal("TOKEN_}") &&
         AuxIf(auxIfNode)) {
-        node->addChild(make_unique<ASTNode>("if"));
-        node->addChild(make_unique<ASTNode>("("));
-        node->addChild(std::move(exprNode));
-        node->addChild(make_unique<ASTNode>(")"));
-        node->addChild(make_unique<ASTNode>("{"));
-        node->addChild(std::move(stmtListNode));
-        node->addChild(make_unique<ASTNode>("}"));
-        node->addChild(std::move(auxIfNode));
+        node.addChild(std::move(exprNode));
+        node.addChild(std::move(stmtListNode));
+        if (!auxIfNode.isEmpty()) {
+            node.addChild(std::move(auxIfNode));
+        }
         return true;
     }
     fail("Error en sentencia if: se esperaba '(' o '{'");
     return false;
 }
+
+
 
 /*
   Statement -> VarDecl
@@ -520,8 +510,8 @@ bool Parser::IfStmt(unique_ptr<ASTNode>& node) {
   Statement -> { StmtList }
   Statement -> PrintStmt
 */
-bool Parser::Statement(unique_ptr<ASTNode>& node) {
-    unique_ptr<ASTNode> stmtNode;
+bool Parser::Statement(ASTNode& node) {
+    ASTNode stmtNode;
 
     if (VarDecl(stmtNode) || IfStmt(stmtNode) || ForStmt(stmtNode) || ReturnStmt(stmtNode) ||
         ExprStmt(stmtNode) || CompoundStmt(stmtNode) || PrintStmt(stmtNode)) {
@@ -534,24 +524,20 @@ bool Parser::Statement(unique_ptr<ASTNode>& node) {
     return false;
 }
 
+
 /*
 auxPrimary ::= ( ExprList )
 auxPrimary ::= ''
 */
-bool Parser::AuxPrimary(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("AuxPrimary");
-
-    unique_ptr<ASTNode> exprListNode;
-    if (nonTerminal("TOKEN_(")  &&
-        ExprList(exprListNode) &&
-        nonTerminal("TOKEN_)")){
-        node->addChild(make_unique<ASTNode>("("));
-        node->addChild(std::move(exprListNode));
-        node->addChild(make_unique<ASTNode>(")"));
+bool Parser::AuxPrimary(ASTNode& node) {
+    ASTNode exprListNode;
+    if (nonTerminal("TOKEN_(") && ExprList(exprListNode) && nonTerminal("TOKEN_)")) {
+        node = std::move(exprListNode);
         return true;
     }
-    return true;
+    return true;  // Caso ε, retorna sin agregar nodos
 }
+
 
 /*
 Primary ::= Identifier auxPrimary
@@ -562,114 +548,91 @@ Primary ::= BooleanLiteral --> True o false
 Primary ::= ( Expression )
 */
 
-bool Parser::Primary(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("Primary");
-
-    unique_ptr<ASTNode> auxPrimaryNode, exprNode;
-    string bool_name = currToken().token_name;
-    if(nonTerminal("TOKEN_ID") && AuxPrimary(auxPrimaryNode)){
-        node->addChild(make_unique<ASTNode>("TOKEN_ID"));
-        node->addChild(std::move(auxPrimaryNode));
+bool Parser::Primary(ASTNode& node) {
+    if (nonTerminal("TOKEN_ID")) {
+        node = ASTNode("Identifier");
+        ASTNode auxPrimaryNode;
+        if (AuxPrimary(auxPrimaryNode)) {
+            node.addChild(std::move(auxPrimaryNode));
+        }
         return true;
     }
-    if(nonTerminal("TOKEN_Num")){
-        node->addChild(make_unique<ASTNode>("TOKEN_Num"));
+    if (nonTerminal("TOKEN_Num")) {
+        node = ASTNode("NumberLiteral");
         return true;
     }
-    if(nonTerminal("TOKEN_True")||nonTerminal("TOKEN_False")){
-        node->addChild(make_unique<ASTNode>(bool_name));
+    if (nonTerminal("TOKEN_True") || nonTerminal("TOKEN_False")) {
+        node = ASTNode("BooleanLiteral");
         return true;
     }
-    if (nonTerminal("TOKEN_Comilla_doble") &&
-        nonTerminal("TOKEN_Text_string") &&
-        nonTerminal("TOKEN_Comilla_doble")){
-        node->addChild(make_unique<ASTNode>("\""));
-        node->addChild(make_unique<ASTNode>("TOKEN_Text_string"));
-        node->addChild(make_unique<ASTNode>("\""));
+    if (nonTerminal("TOKEN_Comilla_doble") && nonTerminal("TOKEN_Text_string") && nonTerminal("TOKEN_Comilla_doble")) {
+        node = ASTNode("StringLiteral");
         return true;
     }
-    if (nonTerminal("TOKEN_Comilla") &&
-        nonTerminal("TOKEN_ID")&&
-        nonTerminal("TOKEN_Comilla")){
-        node->addChild(make_unique<ASTNode>("'"));
-        node->addChild(make_unique<ASTNode>("TOKEN_ID"));
-        node->addChild(make_unique<ASTNode>("'"));
+    if (nonTerminal("TOKEN_Comilla") && nonTerminal("TOKEN_ID") && nonTerminal("TOKEN_Comilla")) {
+        node = ASTNode("CharLiteral");
         return true;
     }
-    if (nonTerminal("TOKEN_(")  &&
-        Expression(exprNode) &&
-        nonTerminal("TOKEN_)")){
-        node->addChild(make_unique<ASTNode>("("));
-        node->addChild(std::move(exprNode));
-        node->addChild(make_unique<ASTNode>(")"));
+    if (nonTerminal("TOKEN_(") && Expression(node) && nonTerminal("TOKEN_)")) {
         return true;
     }
     fail("Error en Primary: se esperaba un identificador, número, booleano, cadena de texto, o una expresion entre paréntesis.");
     return false;
 }
 
+
 /*
 Factor' ::= [ Expression ] Factor'
 Factor' ::= ''
 */
-bool Parser::FactorPrime(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("FactorPrime");
-
-    unique_ptr<ASTNode> exprNode, factorPrimeNode;
-    if (nonTerminal("TOKEN_[")&&
-        Expression(exprNode)&&
-        nonTerminal("TOKEN_]")&&
-        FactorPrime(factorPrimeNode)){
-        node->addChild(make_unique<ASTNode>("["));
-        node->addChild(std::move(exprNode));     
-        node->addChild(make_unique<ASTNode>("]")); 
-        node->addChild(std::move(factorPrimeNode));
-        return true;
+bool Parser::FactorPrime(ASTNode& node) {
+    ASTNode exprNode, factorPrimeNode;
+    while (nonTerminal("TOKEN_[") && Expression(exprNode) && nonTerminal("TOKEN_]")) {
+        node.addChild(std::move(exprNode));  // Agregar la expresión directamente
+        exprNode = ASTNode();  // Reiniciar para el siguiente índice
     }
     return true;
 }
 
+
 /*
 Factor ::= Primary Factor'
 */
-bool Parser::Factor(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("Factor");
-
-    unique_ptr<ASTNode> primaryNode, factorPrimeNode;
-    if(Primary(primaryNode) && FactorPrime(factorPrimeNode)){
-        node->addChild(std::move(primaryNode)); 
-        node->addChild(std::move(factorPrimeNode));
+bool Parser::Factor(ASTNode& node) {
+    ASTNode primaryNode;
+    if (Primary(primaryNode)) {  // Procesamos Primary
+        node = std::move(primaryNode);  // Usamos directamente Primary
+        FactorPrime(node);  // Intentamos procesar Factor' si es necesario
         return true;
     }
-    fail("Error en Factor: se esperaba una expresion primaria seguida de un operador o índice opcional.");
+    fail("Error en Factor: se esperaba una expresión primaria.");
     return false;
 }
+
 
 /*
 Unary ::= ! Unary
 Unary ::= - Unary
 Unary ::= Factor
 */
-bool Parser::Unary(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("Unary");
-
-    unique_ptr<ASTNode> unaryNode,factorNode;
-  /*if (nonTerminal("TOKEN_!") || nonTerminal("TOKEN_-") || Factor(factorNode)) {
-    return true;
-  }*/
-    string temp_neg= currToken().token_name;
-    if ((nonTerminal("TOKEN_!")|| nonTerminal("TOKEN_-")) && Unary(unaryNode)) {
-        node->addChild(make_unique<ASTNode>(temp_neg));
-        node->addChild(std::move(unaryNode));
+bool Parser::Unary(ASTNode& node) {
+    string operatorSymbol;
+    if (nonTerminal("TOKEN_!") || nonTerminal("TOKEN_-")) {
+        operatorSymbol = currToken().token_name;
+        node = ASTNode(operatorSymbol);
+        ASTNode unaryNode;
+        if (Unary(unaryNode)) {
+            node.addChild(std::move(unaryNode));
+            return true;
+        }
+    }
+    else if (Factor(node)) {
         return true;
     }
-    else if (Factor(factorNode)) {
-        node->addChild(std::move(factorNode));
-        return true;
-    }
-    fail("Error en Unary: se esperaba un operador de negación '!' o '-' o una expresion de factor.");
-  return false;
+    fail("Error en Unary: se esperaba un operador de negación '!' o '-' o una expresión de factor.");
+    return false;
 }
+
 
 /*
 Term' ::= * Unary Term'
@@ -677,75 +640,68 @@ Term' ::= / Unary Term'
 Term' ::= % Unary Term'
 Term' ::= ''
 */
-bool Parser::TermPrime(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("TermPrime");
-
-    unique_ptr<ASTNode> unaryNode ,termPrimeNode;
-    string temp_op= currToken().token_name;
-    cout << "dsadasfasfasfsafsafsafasfsafas: " << temp_op << endl;
-  if ((nonTerminal("TOKEN_*") || nonTerminal("TOKEN_/") || nonTerminal("TOKEN_%")) &&
-      Unary(unaryNode) &&
-      TermPrime(termPrimeNode)){
-      node->addChild(make_unique<ASTNode>(currToken().token_name));
-      node->addChild(std::move(unaryNode));     
-      node->addChild(std::move(termPrimeNode));
-    return true;
-  }
-  return true;
+bool Parser::TermPrime(ASTNode& node) {
+    ASTNode unaryNode, termPrimeNode;
+    if ((nonTerminal("TOKEN_*") || nonTerminal("TOKEN_/") || nonTerminal("TOKEN_%")) && Unary(unaryNode)) {  // Procesamos los operadores *, /, %
+        node = ASTNode(currToken().token_name);
+        node.addChild(std::move(unaryNode));
+        if (TermPrime(termPrimeNode)) {  // Procesamos Term' recursivamente
+            node.addChild(std::move(termPrimeNode));
+        }
+        return true;
+    }
+    return true;  // Caso vacío, no agregamos nada
 }
+
 
 /*
 Term ::= Unary Term'
 */
-bool Parser::Term(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("Term");
-
-    unique_ptr<ASTNode> unaryNode,termPrimeNode;
-    if(Unary(unaryNode) && TermPrime(termPrimeNode)){
-        node->addChild(std::move(unaryNode)); 
-        node->addChild(std::move(termPrimeNode));
+bool Parser::Term(ASTNode& node) {
+    ASTNode unaryNode;
+    if (Unary(unaryNode)) {  // Procesamos Unary
+        node = std::move(unaryNode);  // Usamos directamente Unary
+        TermPrime(node);  // Intentamos procesar Term' si es necesario
         return true;
     }
-    fail("Error en Term: se esperaba una expresion unaria seguida de un operador de multiplicación, división o módulo.");
+    fail("Error en Term: se esperaba una expresión unaria.");
     return false;
 }
+
 
 /*
 Expr' ::= + Term Expr'
 Expr' ::= - Term Expr'
 Expr' ::= ''
 */
-bool Parser::ExprPrime(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("ExprPrime");
-
-    unique_ptr<ASTNode> termNode,exprPrimeNode;
-    string temp_sn = currToken().token_name;
-    if ((nonTerminal("TOKEN_+") || nonTerminal("TOKEN_-") ) &&
-        Term(termNode)&&
-        ExprPrime(exprPrimeNode)){
-        node->addChild(make_unique<ASTNode>(temp_sn));
-        node->addChild(std::move(termNode));   
-        node->addChild(std::move(exprPrimeNode));
+bool Parser::ExprPrime(ASTNode& node) {
+    ASTNode termNode, exprPrimeNode;
+    if ((nonTerminal("TOKEN_+") || nonTerminal("TOKEN_-")) && Term(termNode)) {  // Procesamos los operadores + o -
+        node = ASTNode(currToken().token_name);
+        node.addChild(std::move(termNode));
+        if (ExprPrime(exprPrimeNode)) {  // Procesamos Expr' recursivamente
+            node.addChild(std::move(exprPrimeNode));
+        }
         return true;
     }
-    return true;
+    return true;  // Caso vacío, no agregamos nada
 }
+
 
 /*
 Expr ::= Term Expr'
 */
-bool Parser::Expr(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("Expr");
-
-    unique_ptr<ASTNode> termNode,exprPrimeNode;
-    if(Term(termNode) && ExprPrime(exprPrimeNode)){
-        node->addChild(std::move(termNode));
-        node->addChild(std::move(exprPrimeNode));
+bool Parser::Expr(ASTNode& node) {
+    ASTNode termNode;
+    if (Term(termNode)) {  // Procesamos la expresión Term
+        node = std::move(termNode);  // Usamos directamente Term
+        ExprPrime(node);  // Intentamos procesar Expr' si es necesario
         return true;
     }
-    fail("Error en Expr: se esperaba un término seguido de un operador de suma o resta.");
+    fail("Error en Expr: se esperaba una expresión.");
     return false;
 }
+
 
 /*
 RelExpr' ::= < Expr RelExpr'
@@ -754,205 +710,198 @@ RelExpr' ::= <= Expr RelExpr'
 RelExpr' ::= >= Expr RelExpr'
 RelExpr' ::= ''
 */
-bool Parser::RelExprPrime(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("RelExprPrime");
-
-    unique_ptr<ASTNode> exprNode , relExprPrimeNode;
-    string temp_com = currToken().token_name;
-    if ((nonTerminal("TOKEN_<") || nonTerminal("TOKEN_>") || nonTerminal("TOKEN_<=")||nonTerminal("TOKEN_>=")) &&
-        Expr(exprNode)&&
-        RelExprPrime(relExprPrimeNode)){
-        node->addChild(make_unique<ASTNode>(temp_com));
-        node->addChild(std::move(exprNode));
-        node->addChild(std::move(relExprPrimeNode));
+bool Parser::RelExprPrime(ASTNode& node) {
+    ASTNode exprNode, relExprPrimeNode;
+    if ((nonTerminal("TOKEN_<") || nonTerminal("TOKEN_>") || nonTerminal("TOKEN_<=") || nonTerminal("TOKEN_>=")) && Expr(exprNode)) {  // Procesamos los operadores relacionales
+        node = ASTNode(currToken().token_name);
+        node.addChild(std::move(exprNode));
+        if (RelExprPrime(relExprPrimeNode)) {  // Procesamos RelExpr' recursivamente
+            node.addChild(std::move(relExprPrimeNode));
+        }
         return true;
     }
-    return true;
+    return true;  // Caso vacío, no agregamos nada
 }
+
 
 /*
 RelExpr ::= Expr RelExpr'
 */
-bool Parser::RelExpr(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("RelExpr");
-
-    unique_ptr<ASTNode> exprNode, relExprPrimeNode;
-    if(Expr(exprNode)&&RelExprPrime(relExprPrimeNode)){
-        node->addChild(std::move(exprNode)); 
-        node->addChild(std::move(relExprPrimeNode));
+bool Parser::RelExpr(ASTNode& node) {
+    ASTNode exprNode;
+    if (Expr(exprNode)) {  // Procesamos Expr
+        node = std::move(exprNode);  // Usamos directamente Expr
+        RelExprPrime(node);  // Intentamos procesar RelExpr' si es necesario
         return true;
     }
-    fail("Error en RelExpr: se esperaba una expresion relacional con operadores de comparación (<, >, <=, >=).");
+    fail("Error en RelExpr: se esperaba una expresión relacional.");
     return false;
 }
+
 
 /*
 EqExpr' ::= == RelExpr EqExpr'
 EqExpr' ::= != RelExpr EqExpr'
 EqExpr' ::= ''
 */
-bool Parser::EqExprprime(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("EqExprPrime");
-
-    unique_ptr<ASTNode> relExprNode,eqExprPrimeNode;
-    string temp_compa = currToken().token_name;
-    if ((nonTerminal("TOKEN_==") || nonTerminal("TOKEN_!=")) &&
-        RelExpr(relExprNode)&&
-        EqExprprime(eqExprPrimeNode)){
-        node->addChild(make_unique<ASTNode>(temp_compa));
-        node->addChild(std::move(relExprNode));    
-        node->addChild(std::move(eqExprPrimeNode));
+bool Parser::EqExprprime(ASTNode& node) {
+    ASTNode relExprNode, eqExprPrimeNode;
+    if ((nonTerminal("TOKEN_==") || nonTerminal("TOKEN_!=")) && RelExpr(relExprNode)) {  // Procesamos los operadores de igualdad
+        node = ASTNode(currToken().token_name);
+        node.addChild(std::move(relExprNode));
+        if (EqExprprime(eqExprPrimeNode)) {  // Procesamos EqExpr' recursivamente
+            node.addChild(std::move(eqExprPrimeNode));
+        }
         return true;
     }
-    return true;
+    return true;  // Caso vacío, no agregamos nada
 }
+
 
 /*
 EqExpr ::= RelExpr EqExpr'
 */
-bool Parser::EqExpr(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("EqExpr");
-
-    unique_ptr<ASTNode> relExprNode,eqExprPrimeNode;
-    if(RelExpr(relExprNode) && EqExprprime(eqExprPrimeNode)){
-        node->addChild(std::move(relExprNode)); 
-        node->addChild(std::move(eqExprPrimeNode));
+bool Parser::EqExpr(ASTNode& node) {
+    ASTNode relExprNode;
+    if (RelExpr(relExprNode)) {  // Procesamos RelExpr
+        node = std::move(relExprNode);  // Usamos directamente RelExpr
+        EqExprprime(node);  // Intentamos procesar EqExpr' si es necesario
         return true;
     }
-    fail("Error en EqExpr: se esperaba una expresion de igualdad con operadores '==' o '!='.");
+    fail("Error en EqExpr: se esperaba una expresión de igualdad.");
     return false;
 }
+
 
 /*
 AndExpr' ::= && EqExpr AndExpr'
 AndExpr' ::= ''
 */
-bool Parser:: AndExprPrime(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("AndExprPrime");
-
-    unique_ptr<ASTNode> eqExprNode,andExprPrimeNode;
-    if (nonTerminal("TOKEN_&&")&&
-        EqExpr(eqExprNode)&&
-        AndExprPrime(andExprPrimeNode)){
-        node->addChild(make_unique<ASTNode>("&&")); 
-        node->addChild(std::move(eqExprNode));     
-        node->addChild(std::move(andExprPrimeNode));
+bool Parser::AndExprPrime(ASTNode& node) {
+    ASTNode eqExprNode, andExprPrimeNode;
+    if (nonTerminal("TOKEN_&&") && EqExpr(eqExprNode)) {  // Procesamos el operador && con EqExpr
+        node = ASTNode("&&");
+        node.addChild(std::move(eqExprNode));
+        if (AndExprPrime(andExprPrimeNode)) {  // Procesamos AndExpr' recursivamente
+            node.addChild(std::move(andExprPrimeNode));
+        }
         return true;
     }
-    return true;
+    return true;  // Caso vacío, no agregamos nada
 }
+
 
 /*
 AndExpr ::= EqExpr AndExpr'
 */
-bool Parser::AndExpr(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("AndExpr");
-
-    unique_ptr<ASTNode> eqExprNode,andExprPrimeNode;
-    if(EqExpr(eqExprNode)&&AndExprPrime(andExprPrimeNode)){
-        node->addChild(std::move(eqExprNode)); 
-        node->addChild(std::move(andExprPrimeNode));
+bool Parser::AndExpr(ASTNode& node) {
+    ASTNode eqExprNode;
+    if (EqExpr(eqExprNode)) {  // Procesamos EqExpr
+        node = std::move(eqExprNode);  // Usamos directamente EqExpr
+        AndExprPrime(node);  // Intentamos procesar AndExpr' si es necesario
         return true;
     }
-    fail("Error en AndExpr: se esperaba una expresion AND con el operador '&&'.");
+    fail("Error en AndExpr: se esperaba una expresión AND.");
     return false;
 }
+
 
 /*
 OrExpr' ::= || AndExpr OrExpr'
 OrExpr' ::= ''
 */
-bool Parser::OrExprPrime(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("OrExprPrime");
-
-    unique_ptr<ASTNode> andExprNode,orExprPrimeNode;
-    if (nonTerminal("TOKEN_||")&&
-        AndExpr(andExprNode)&&
-        OrExprPrime(orExprPrimeNode)){
-        node->addChild(make_unique<ASTNode>("||")); 
-        node->addChild(std::move(andExprNode));    
-        node->addChild(std::move(orExprPrimeNode));
+bool Parser::OrExprPrime(ASTNode& node) {
+    ASTNode andExprNode, orExprPrimeNode;
+    if (nonTerminal("TOKEN_||") && AndExpr(andExprNode)) {  // Procesamos el operador || con AndExpr
+        node = ASTNode("||");
+        node.addChild(std::move(andExprNode));
+        if (OrExprPrime(orExprPrimeNode)) {  // Procesamos OrExpr' recursivamente
+            node.addChild(std::move(orExprPrimeNode));
+        }
         return true;
     }
-    return true;
+    return true;  // Caso vacío, no agregamos nada
 }
+
 
 /*
 OrExpr ::= AndExpr OrExpr'
 */
-bool Parser::OrExpr(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("OrExpr");
-
-    unique_ptr<ASTNode> andExprNode,orExprPrimeNode;
-    if (AndExpr(andExprNode)&& OrExprPrime(orExprPrimeNode)){
-        node->addChild(std::move(andExprNode)); 
-        node->addChild(std::move(orExprPrimeNode));
+bool Parser::OrExpr(ASTNode& node) {
+    ASTNode andExprNode;
+    if (AndExpr(andExprNode)) {  // Procesamos la expresión AndExpr
+        node = std::move(andExprNode);  // Usamos directamente AndExpr
+        OrExprPrime(node);  // Intentamos procesar OrExpr' si es necesario
         return true;
     }
-    fail("Error en OrExpr: se esperaba una expresion OR con el operador '||'.");
+    fail("Error en OrExpr: se esperaba una expresión OR.");
     return false;
 }
+
 
 /*
 AuxExpression ::= = Expression
 AuxExpression ::= ''
 */
-bool Parser::AuxExpression(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("AuxExpression");
-
-    unique_ptr<ASTNode> exprNode;
-    if (nonTerminal("TOKEN_=") && Expression(exprNode)){
-        node->addChild(make_unique<ASTNode>("="));
-        node->addChild(std::move(exprNode));
+bool Parser::AuxExpression(ASTNode& node) {
+    ASTNode exprNode;
+    if (nonTerminal("TOKEN_=") && Expression(exprNode)) {
+        node = ASTNode("=");
+        node.addChild(std::move(exprNode));  // Agregar directamente la expresión
         return true;
     }
-    return true;
+    return true; // Caso ε, retorna sin agregar nodos
 }
+
 
 /*
 Expression ::= OrExpr AuxExpression
 */
 
-bool Parser::Expression(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("Expression");
-
-    unique_ptr<ASTNode> orExprNode,auxExprNode;
-    if (OrExpr(orExprNode)&&AuxExpression(auxExprNode)){
-        node->addChild(std::move(orExprNode)); 
-        node->addChild(std::move(auxExprNode));
+bool Parser::Expression(ASTNode& node) {
+    ASTNode orExprNode, auxExprNode;
+    if (OrExpr(orExprNode) && AuxExpression(auxExprNode)) {
+        node = ASTNode("Expression");
+        node.addChild(std::move(orExprNode));
+        if (!auxExprNode.isEmpty()) {
+            node.addChild(std::move(auxExprNode));
+        }
         return true;
     }
     fail("Error en Expression: se esperaba una expresion OR seguida de una posible asignación.");
     return false;
 }
 
+
 /*
 ExprList' ::= , Expression ExprList'
 ExprList' ::= ''
 */
-bool Parser::ExprListPrime(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("ExprListPrime");
-
-    unique_ptr<ASTNode> exprNode,exprListPrimeNode;
-    if (Expression(exprNode)&& ExprListPrime(exprListPrimeNode)){
-        node->addChild(make_unique<ASTNode>(",")); // Añadir coma
-        node->addChild(std::move(exprNode));       // Añadir expresión
-        node->addChild(std::move(exprListPrimeNode));
+bool Parser::ExprListPrime(ASTNode& node) {
+    ASTNode exprNode, exprListPrimeNode;
+    if (nonTerminal("TOKEN_,") && Expression(exprNode) && ExprListPrime(exprListPrimeNode)) {
+        node = ASTNode( ",");
+        node.addChild(std::move(exprNode));
+        if (!exprListPrimeNode.isEmpty()) {
+            node.addChild(std::move(exprListPrimeNode));
+        }
         return true;
     }
-    return true;
+    return true; // Caso ε, retorna sin agregar nodos
 }
+
 
 /*
 ExprList ::= Expression ExprList'
 */
-bool Parser::ExprList(unique_ptr<ASTNode>& node){
-    node = make_unique<ASTNode>("ExprList");
-
-    unique_ptr<ASTNode> exprNode,exprListPrimeNode;
-    if (Expression(exprNode)&& ExprListPrime(exprListPrimeNode)){
-        node->addChild(std::move(exprNode)); // Añadir expresión inicial
-        node->addChild(std::move(exprListPrimeNode));
+bool Parser::ExprList(ASTNode& node) {
+    ASTNode exprNode, exprListPrimeNode;
+    if (Expression(exprNode) && ExprListPrime(exprListPrimeNode)) {
+        node = ASTNode("ExprList");
+        node.addChild(std::move(exprNode));
+        if (!exprListPrimeNode.isEmpty()) {
+            node.addChild(std::move(exprListPrimeNode));
+        }
         return true;
     }
     fail("Error en ExprList: se esperaba una expresion en la lista de expresiones.");
