@@ -4,7 +4,7 @@
 #include <vector>
 #include <string>
 #include <unordered_set>
-
+#include <fstream> 
 int errorCount = 0;
 string fallo = "vacio";
 int token_num = 0;
@@ -19,7 +19,36 @@ void printAST(const ASTNode& node, int level = 0) {
         printAST(child, level + 1);
     }
 }
+void exportToDot(const ASTNode& node, ofstream& dotFile, int& nodeId, int parentId = -1) {
+    int currentId = nodeId++;
+    dotFile << "    node" << currentId << " [label=\"" << node.token_name << "\"];" << endl;
 
+    if (parentId != -1) {
+        dotFile << "    node" << parentId << " -> node" << currentId << ";" << endl;
+    }
+
+    for (const auto& child : node.children) {
+        exportToDot(child, dotFile, nodeId, currentId);
+    }
+}
+
+void generateDotFile(const ASTNode& root, const string& filename) {
+    ofstream dotFile(filename);
+    if (!dotFile.is_open()) {
+        cerr << "Error al abrir el archivo DOT." << endl;
+        return;
+    }
+
+    dotFile << "digraph AST {" << endl;
+    dotFile << "    node [shape=box];" << endl;
+
+    int nodeId = 0;
+    exportToDot(root, dotFile, nodeId);
+
+    dotFile << "}" << endl;
+    dotFile.close();
+    cout << "Árbol exportado al archivo DOT: " << filename << endl;
+}
 
 Parser::Parser(const vector<token>& tokens) : tokens(tokens), current(0) {
 }
@@ -31,6 +60,8 @@ bool Parser::parse(ASTNode& root) {
         return false;
     }
     printAST(root);
+    generateDotFile(root, "tree.dot");
+    system("dot -Tpng tree.dot -o astree.png");
     return success;
 }
 
@@ -73,15 +104,35 @@ bool Parser::nonTerminal(string name) {
   Type' -> ε
 */
 bool Parser::TypePrime(ASTNode& node) {
+    bool assigned=false;
     if (nonTerminal("TOKEN_[")) {
-        node= ASTNode ("Array");
-        if (nonTerminal("TOKEN_]") && TypePrime(node)) {
-            node.addChild(node); // Añadimos el nodo Array solo si hay contenido
+        if (!nonTerminal("TOKEN_]")) {
+            fail("Falta el token de cierre ']'");
+            return false;
         }
+
+        // Crear un nuevo nodo para este nivel de array
+        ASTNode arrayNode("Array");
+        assigned=true;
+        // Nodo temporal para los niveles restantes de TypePrime
+        ASTNode childNode;
+
+        // Procesar recursivamente los niveles adicionales
+        if (TypePrime(childNode)) {
+            // Mover el nodo resultante como hijo del nodo actual
+            arrayNode.addChild(std::move(childNode));
+            assigned=true;
+        }
+
+        // Mover el nuevo nodo a `node` para encadenarlo
+        node = std::move(arrayNode);
+
         return true;
     }
-    return false; // Caso vacío, sin nodos adicionales
+
+    return assigned; // Epsilon (vacío)
 }
+
 
 
 
@@ -336,14 +387,16 @@ bool Parser::ParamListPrime(ASTNode& node) {
   StmtList -> Statement StmtList'
 */
 bool Parser::StmtList(ASTNode& node) {
-    node = ASTNode("StmtList");
+    bool hasStatements = false;
+    ASTNode node_stmt;
 
-    ASTNode stmtNode;
-    while (Statement(stmtNode)) {
-        node.addChild(std::move(stmtNode));
-        stmtNode = ASTNode();  // Reiniciar para la siguiente sentencia
+    // Procesar cada sentencia sin crear un nodo StmtList
+    while (Statement(node_stmt)) {
+        node.addChild(std::move(node_stmt));  // Solo agregar las sentencias
+        hasStatements = true;
     }
-    return true;
+    
+    return hasStatements;  // Solo retornamos true si encontramos al menos una sentencia
 }
 
 
@@ -352,29 +405,42 @@ bool Parser::StmtList(ASTNode& node) {
   StmtList' -> ε
 */
 bool Parser::StmtListPrime(ASTNode& node) {
-    ASTNode stmtNode;
-    while (Statement(stmtNode)) {
-        node.addChild(std::move(stmtNode));
-        stmtNode = ASTNode();  // Reiniciar para la próxima sentencia
+    bool hasStatements = false;
+    ASTNode node_stmt;
+
+    // Procesar sentencias adicionales si las hay
+    while (Statement(node_stmt)) {
+        node.addChild(std::move(node_stmt));  // Solo agregar las sentencias adicionales
+        hasStatements = true;
     }
-    return true;
+    
+    return hasStatements;  // Solo retornamos true si encontramos al menos una sentencia
 }
+
+
 
 
 /*
   CompoundStmt -> { StmtList }
 */
 bool Parser::CompoundStmt(ASTNode& node) {
-    node = ASTNode("CompoundStmt");
-
-    ASTNode stmtListNode;
-    if (nonTerminal("TOKEN_{") && StmtList(stmtListNode) && nonTerminal("TOKEN_}")) {
-        node.addChild(std::move(stmtListNode));
-        return true;
+    if (nonTerminal("TOKEN_{")) {
+        // Procesar la lista de sentencias dentro de las llaves
+        ASTNode stmtListNode;
+        if (StmtList(stmtListNode) && nonTerminal("TOKEN_}")) {
+            // Solo añadimos el contenido dentro de las llaves sin crear un nodo CompoundStmt
+            node = std::move(stmtListNode);  // El nodo recibido contiene ya las sentencias
+            return true;
+        }
+        fail("Error en bloque de sentencias: se esperaba '}'");
+        return false;
     }
-    fail("Error en bloque de sentencias: se esperaba '{' o '}'");
+    
+    fail("Error en bloque de sentencias: se esperaba '{'");
     return false;
 }
+
+
 
 
 /*
@@ -401,20 +467,26 @@ bool Parser::ExprStmt(ASTNode& node) {
 PrintStmt -> print ( ExprList ) ;
 */
 bool Parser::PrintStmt(ASTNode& node) {
-    node = ASTNode("PrintStmt");
+    // Nodo raíz de la sentencia de impresión
+    ASTNode printStmtNode("PrintStmt");
 
     ASTNode exprListNode;
+    // Verificamos si la estructura completa de la sentencia es válida
     if (nonTerminal("TOKEN_print") &&
         nonTerminal("TOKEN_(") &&
         ExprList(exprListNode) &&
         nonTerminal("TOKEN_)") &&
         nonTerminal("TOKEN_;")) {
-        node.addChild(std::move(exprListNode));
+        // Si es válida, agregamos el nodo ExprList como hijo del nodo PrintStmt
+        printStmtNode.addChild(std::move(exprListNode));
+        node = std::move(printStmtNode);  // Movemos el nodo completo a 'node'
         return true;
     }
+
     fail("Error en sentencia de impresión: se esperaba '(' o ')'");
     return false;
 }
+
 
 
 /*
@@ -537,11 +609,13 @@ auxPrimary ::= ''
 */
 bool Parser::AuxPrimary(ASTNode& node) {
     ASTNode exprListNode;
+    bool entro=false;
     if (nonTerminal("TOKEN_(") && ExprList(exprListNode) && nonTerminal("TOKEN_)")) {
         node = std::move(exprListNode);
-        return true;
+        bool entro=true;
+        return entro;
     }
-    return true;  // Caso ε, retorna sin agregar nodos
+    return entro;  // Caso ε, retorna sin agregar nodos
 }
 
 
@@ -557,7 +631,7 @@ Primary ::= ( Expression )
 bool Parser::Primary(ASTNode& node) {
     if (nonTerminal("TOKEN_ID")) {
         node = ASTNode("Identifier");  // Nodo para el identificador
-        node.addChild(ASTNode(currToken().token_name));  // Usamos el nombre del identificador
+        //node.addChild(ASTNode(currToken().token_name));  // Usamos el nombre del identificador
         ASTNode auxPrimaryNode;
         if (AuxPrimary(auxPrimaryNode)) {
             node.addChild(std::move(auxPrimaryNode));
@@ -651,8 +725,9 @@ bool Parser::TermPrime(ASTNode& node) {
     ASTNode unaryNode, termPrimeNode;
     ASTNode tempo_name = node;
     bool addedSomething = false;
+    string temp=currToken().token_name;
     if ((nonTerminal("TOKEN_*") || nonTerminal("TOKEN_/") || nonTerminal("TOKEN_%")) && Unary(unaryNode)) {  // Procesamos los operadores *, /, %
-        node = ASTNode(currToken().token_name);
+        node = ASTNode(temp);
         addedSomething = true;
         node.addChild(std::move(tempo_name));
         node.addChild(std::move(unaryNode));
@@ -733,8 +808,9 @@ bool Parser::RelExprPrime(ASTNode& node) {
     ASTNode exprNode, relExprPrimeNode;
     ASTNode tempo_name = node;
     bool addedSomething = false;
+    string temp=currToken().token_name;
     if ((nonTerminal("TOKEN_<") || nonTerminal("TOKEN_>") || nonTerminal("TOKEN_<=") || nonTerminal("TOKEN_>=")) && Expr(exprNode)) {  // Procesamos los operadores relacionales
-        node = ASTNode(currToken().token_name);
+        node = ASTNode(temp);
         addedSomething = true;
         node.addChild(std::move(tempo_name));
         node.addChild(std::move(exprNode));
@@ -772,8 +848,9 @@ bool Parser::EqExprprime(ASTNode& node) {
     ASTNode relExprNode, eqExprPrimeNode;
     ASTNode tempo_name = node;
     bool addedSomething = false;
+    string temp=currToken().token_name;
     if ((nonTerminal("TOKEN_==") || nonTerminal("TOKEN_!=")) && RelExpr(relExprNode)) {  // Procesamos los operadores de igualdad
-        node = ASTNode(currToken().token_name);
+        node = ASTNode(temp);
         addedSomething = true;
         node.addChild(std::move(tempo_name));
         node.addChild(std::move(relExprNode));
@@ -940,8 +1017,7 @@ ExprList ::= Expression ExprList'
 bool Parser::ExprList(ASTNode& node) {
     ASTNode exprNode, exprListPrimeNode;
     if (Expression(exprNode) && ExprListPrime(exprListPrimeNode)) {
-        node = ASTNode("ExprList");
-        node.addChild(std::move(exprNode));
+        node = std::move(exprNode);
         if (!exprListPrimeNode.isEmpty()) {
             node.addChild(std::move(exprListPrimeNode));
         }
