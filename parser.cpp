@@ -650,16 +650,19 @@ Term' ::= ''
 bool Parser::TermPrime(ASTNode& node) {
     ASTNode unaryNode, termPrimeNode;
     ASTNode tempo_name = node;
+    bool addedSomething = false;
     if ((nonTerminal("TOKEN_*") || nonTerminal("TOKEN_/") || nonTerminal("TOKEN_%")) && Unary(unaryNode)) {  // Procesamos los operadores *, /, %
         node = ASTNode(currToken().token_name);
+        addedSomething = true;
         node.addChild(std::move(tempo_name));
         node.addChild(std::move(unaryNode));
         if (TermPrime(termPrimeNode)) {  // Procesamos Term' recursivamente
             node.addChild(std::move(termPrimeNode));
+            addedSomething = true;
         }
         return true;
     }
-    return true;  // Caso vacío, no agregamos nada
+    return addedSomething;  // Caso vacío, no agregamos nada
 }
 
 
