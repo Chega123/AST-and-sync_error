@@ -1,4 +1,1 @@
-/* Declaracion de
-  Variables */
-int x;  
-void[][][] data =arr+2; 
+void[][][] data = a + 5; 

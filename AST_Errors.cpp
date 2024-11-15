@@ -31,7 +31,7 @@ int main() {
     cout << endl << "P A R S E R" << endl << endl;
 
     Parser parser(tokens);
-    std::unique_ptr<ParserNode> ast;
+    std::unique_ptr<ASTNode> ast;
     // Ejecutar el análisis sintáctico
     if (parser.parse(ast)) {
         std::cout << "Parsing exitoso." << std::endl;
