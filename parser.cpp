@@ -74,14 +74,15 @@ bool Parser::nonTerminal(string name) {
 */
 bool Parser::TypePrime(ASTNode& node) {
     if (nonTerminal("TOKEN_[")) {
-        ASTNode arrayNode("Array");
-        if (nonTerminal("TOKEN_]") && TypePrime(arrayNode)) {
-            node.addChild(arrayNode); // Añadimos el nodo Array
+        node= ASTNode ("Array");
+        if (nonTerminal("TOKEN_]") && TypePrime(node)) {
+            node.addChild(node); // Añadimos el nodo Array solo si hay contenido
         }
         return true;
     }
-    return true; // Caso ε, sin nodos adicionales
+    return false; // Caso vacío, sin nodos adicionales
 }
+
 
 
 
@@ -164,11 +165,13 @@ bool Parser::Function(ASTNode& node) {
 bool Parser::VarDeclPrime(ASTNode& node, ASTNode identifierNode) {
     ASTNode exprNode;
 
+    // Caso con solo el punto y coma
     if (nonTerminal("TOKEN_;")) {
-        node = ASTNode("VarDecl");
+        node = ASTNode("VarDecl");  // Aquí agregamos un nodo solo si es necesario
         node.addChild(identifierNode);
         return true;
     }
+    // Caso con asignación
     else if (nonTerminal("TOKEN_=") && Expression(exprNode) && nonTerminal("TOKEN_;")) {
         node = ASTNode("=");
         node.addChild(identifierNode);
@@ -183,6 +186,7 @@ bool Parser::VarDeclPrime(ASTNode& node, ASTNode identifierNode) {
 
 
 
+
 /*
   VarDecl -> Type Identifier VarDecl'
 */
@@ -190,13 +194,13 @@ bool Parser::VarDecl(ASTNode& node) {
     ASTNode typeNode;
     if (Type(typeNode) && nonTerminal("TOKEN_ID")) {
         ASTNode identifierNode("Identifier");
-        identifierNode.addChild(ASTNode(currToken().token_name));
+        //identifierNode.addChild(ASTNode(currToken().token_name));
 
         ASTNode varDeclPrimeNode;
         if (VarDeclPrime(varDeclPrimeNode, identifierNode)) {
             node = ASTNode("VarDecl");
             node.addChild(typeNode);
-            node.addChild(varDeclPrimeNode);
+            node.addChild(varDeclPrimeNode); // Solo se agrega si VarDeclPrime es válido
             return true;
         }
     }
@@ -207,6 +211,7 @@ bool Parser::VarDecl(ASTNode& node) {
 
 
 
+
 /*
   Declaration -> [ Function ]
   Declaration -> VarDecl
@@ -214,20 +219,21 @@ bool Parser::VarDecl(ASTNode& node) {
 bool Parser::Declaration(ASTNode& node) {
     ASTNode functionNode, varDeclNode;
 
+    // Si es una función, procesarla
     if (nonTerminal("TOKEN_[") && Function(functionNode) && nonTerminal("TOKEN_]")) {
-        node = ASTNode("FunctionDeclaration");
-        node.addChild(functionNode);
+        node = std::move(functionNode);  // Asignamos directamente el nodo de la función
         return true;
     }
+    // Si es una declaración de variable, procesarla
     else if (VarDecl(varDeclNode)) {
-        node = ASTNode("VarDeclaration");
-        node.addChild(varDeclNode);
+        node = std::move(varDeclNode);  // Asignamos directamente el nodo de la variable
         return true;
     }
 
     fail("Error en declaración");
     return false;
 }
+
 
 
 /*
@@ -550,7 +556,8 @@ Primary ::= ( Expression )
 
 bool Parser::Primary(ASTNode& node) {
     if (nonTerminal("TOKEN_ID")) {
-        node = ASTNode("Identifier");
+        node = ASTNode("Identifier");  // Nodo para el identificador
+        node.addChild(ASTNode(currToken().token_name));  // Usamos el nombre del identificador
         ASTNode auxPrimaryNode;
         if (AuxPrimary(auxPrimaryNode)) {
             node.addChild(std::move(auxPrimaryNode));
@@ -642,8 +649,10 @@ Term' ::= ''
 */
 bool Parser::TermPrime(ASTNode& node) {
     ASTNode unaryNode, termPrimeNode;
+    ASTNode tempo_name = node;
     if ((nonTerminal("TOKEN_*") || nonTerminal("TOKEN_/") || nonTerminal("TOKEN_%")) && Unary(unaryNode)) {  // Procesamos los operadores *, /, %
         node = ASTNode(currToken().token_name);
+        node.addChild(std::move(tempo_name));
         node.addChild(std::move(unaryNode));
         if (TermPrime(termPrimeNode)) {  // Procesamos Term' recursivamente
             node.addChild(std::move(termPrimeNode));
@@ -676,16 +685,23 @@ Expr' ::= ''
 */
 bool Parser::ExprPrime(ASTNode& node) {
     ASTNode termNode, exprPrimeNode;
-    if ((nonTerminal("TOKEN_+") || nonTerminal("TOKEN_-")) && Term(termNode)) {  // Procesamos los operadores + o -
-        node = ASTNode(currToken().token_name);
-        node.addChild(std::move(termNode));
+    std::string name_temp = currToken().token_name;
+    ASTNode tempo_name = node;
+    bool addedSomething = false;
+    if ((nonTerminal("TOKEN_+") || nonTerminal("TOKEN_-")) && Term(termNode)) {  // Procesamos + o -
+        node = ASTNode(name_temp);
+        addedSomething = true;
+        node.addChild(std::move(tempo_name));// El nodo para el operador + o -
+        node.addChild(std::move(termNode));  // Añadimos el término que contiene el identificador
         if (ExprPrime(exprPrimeNode)) {  // Procesamos Expr' recursivamente
             node.addChild(std::move(exprPrimeNode));
+            addedSomething = true;
         }
         return true;
     }
-    return true;  // Caso vacío, no agregamos nada
+    return addedSomething;  // Caso vacío, no agregamos nada
 }
+
 
 
 /*
@@ -712,15 +728,20 @@ RelExpr' ::= ''
 */
 bool Parser::RelExprPrime(ASTNode& node) {
     ASTNode exprNode, relExprPrimeNode;
+    ASTNode tempo_name = node;
+    bool addedSomething = false;
     if ((nonTerminal("TOKEN_<") || nonTerminal("TOKEN_>") || nonTerminal("TOKEN_<=") || nonTerminal("TOKEN_>=")) && Expr(exprNode)) {  // Procesamos los operadores relacionales
         node = ASTNode(currToken().token_name);
+        addedSomething = true;
+        node.addChild(std::move(tempo_name));
         node.addChild(std::move(exprNode));
         if (RelExprPrime(relExprPrimeNode)) {  // Procesamos RelExpr' recursivamente
             node.addChild(std::move(relExprPrimeNode));
+            addedSomething = true;
         }
         return true;
     }
-    return true;  // Caso vacío, no agregamos nada
+    return addedSomething;  // Caso vacío, no agregamos nada
 }
 
 
@@ -746,15 +767,20 @@ EqExpr' ::= ''
 */
 bool Parser::EqExprprime(ASTNode& node) {
     ASTNode relExprNode, eqExprPrimeNode;
+    ASTNode tempo_name = node;
+    bool addedSomething = false;
     if ((nonTerminal("TOKEN_==") || nonTerminal("TOKEN_!=")) && RelExpr(relExprNode)) {  // Procesamos los operadores de igualdad
         node = ASTNode(currToken().token_name);
+        addedSomething = true;
+        node.addChild(std::move(tempo_name));
         node.addChild(std::move(relExprNode));
         if (EqExprprime(eqExprPrimeNode)) {  // Procesamos EqExpr' recursivamente
             node.addChild(std::move(eqExprPrimeNode));
+            addedSomething = true;
         }
         return true;
     }
-    return true;  // Caso vacío, no agregamos nada
+    return addedSomething;  // Caso vacío, no agregamos nada
 }
 
 
@@ -779,15 +805,20 @@ AndExpr' ::= ''
 */
 bool Parser::AndExprPrime(ASTNode& node) {
     ASTNode eqExprNode, andExprPrimeNode;
+    ASTNode tempo_name = node;
+    bool addedSomething = false;
     if (nonTerminal("TOKEN_&&") && EqExpr(eqExprNode)) {  // Procesamos el operador && con EqExpr
         node = ASTNode("&&");
+        addedSomething = true;
+        node.addChild(std::move(tempo_name));
         node.addChild(std::move(eqExprNode));
         if (AndExprPrime(andExprPrimeNode)) {  // Procesamos AndExpr' recursivamente
             node.addChild(std::move(andExprPrimeNode));
+            addedSomething = true;
         }
         return true;
     }
-    return true;  // Caso vacío, no agregamos nada
+    return addedSomething;  // Caso vacío, no agregamos nada
 }
 
 
@@ -812,15 +843,20 @@ OrExpr' ::= ''
 */
 bool Parser::OrExprPrime(ASTNode& node) {
     ASTNode andExprNode, orExprPrimeNode;
+    ASTNode tempo_name = node;
+    bool addedSomething = false;
     if (nonTerminal("TOKEN_||") && AndExpr(andExprNode)) {  // Procesamos el operador || con AndExpr
         node = ASTNode("||");
+        addedSomething = true;
+        node.addChild(std::move(tempo_name));
         node.addChild(std::move(andExprNode));
         if (OrExprPrime(orExprPrimeNode)) {  // Procesamos OrExpr' recursivamente
             node.addChild(std::move(orExprPrimeNode));
+            addedSomething = true;
         }
         return true;
     }
-    return true;  // Caso vacío, no agregamos nada
+    return addedSomething;  // Caso vacío, no agregamos nada
 }
 
 
@@ -861,16 +897,20 @@ Expression ::= OrExpr AuxExpression
 bool Parser::Expression(ASTNode& node) {
     ASTNode orExprNode, auxExprNode;
     if (OrExpr(orExprNode) && AuxExpression(auxExprNode)) {
-        node = ASTNode("Expression");
-        node.addChild(std::move(orExprNode));
+        // Directamente pasamos el nodo orExprNode, sin necesidad de envolverlo en "Expression"
+        node = std::move(orExprNode);  // Usamos directamente el nodo OR
+
+        // Si hay un nodo de asignación, lo agregamos
         if (!auxExprNode.isEmpty()) {
-            node.addChild(std::move(auxExprNode));
+            node.addChild(std::move(auxExprNode));  // La asignación, si existe
         }
         return true;
     }
-    fail("Error en Expression: se esperaba una expresion OR seguida de una posible asignación.");
+    fail("Error en Expression: se esperaba una expresión OR seguida de una posible asignación.");
     return false;
 }
+
+
 
 
 /*
