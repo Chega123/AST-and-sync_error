@@ -13,9 +13,6 @@ using namespace std;
 char* text_Arr = nullptr;
 int indexx = 0;
 int sizee = 0;
-int line_global = 1;
-int col_global = 0;
-
 vector<token>tokens;
 
 map<string, string> tokens_list = {
@@ -161,15 +158,15 @@ void scanner(char* buffer) {
             word += get_char();
             col_global++;
             if (tokens_list.find(word) != tokens_list.end()) {
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<< tokens_list[word]<< endl;
+                //// cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<< tokens_list[word]<< endl;
                 tokens.push_back(token(tokens_list[word]));
             }
             else if (valid_identifier) { //si es valido se guarda como id
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<"TOKEN_ID"<< endl;
-                tokens.push_back(token("TOKEN_ID"));
+                //// cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<"TOKEN_ID"<< endl;
+                tokens.push_back(token("TOKEN_ID",word));
             }
             else { 
-                cout << "Error: Identificador invalido '" << word << " linea :" << line_global << " columna: " << col_global << endl;
+                // cout << "Error: Identificador invalido '" << word << " linea :" << line_global << " columna: " << col_global << endl;
             }
         }
 
@@ -186,11 +183,11 @@ void scanner(char* buffer) {
             word += get_char();
             col_global++;// Añadir el último carácter leído
             if (valid_identifier) {
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<"TOKEN_Num"<< endl;
-                tokens.push_back(token("TOKEN_Num"));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<"TOKEN_Num"<< endl;
+                tokens.push_back(token("TOKEN_Num",word));
             }
             else {
-                cout << "Error: Numero invalido '" << word << "linea :" << line_global << " columna: " << col_global << endl;
+                // cout << "Error: Numero invalido '" << word << "linea :" << line_global << " columna: " << col_global << endl;
             }
         }
 
@@ -201,8 +198,8 @@ void scanner(char* buffer) {
             if (peek_char() == '*') {
                 word += get_char();
                 word += get_char();
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
                 
                 int nested_com = 1;
                 while (nested_com > 0) {
@@ -223,24 +220,24 @@ void scanner(char* buffer) {
                     }
                 }
                 word = "*/";
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
             else if (peek_char() == '/') {
                 word += get_char();
                 col_global++;
                 word += get_char();
                 col_global++;//porque son 2 simbolos
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
                 while (peek_actual_char() != '\n') {
                     get_char();
                     col_global++;//salta todo hasta q termine la linea
                 }
             }
             else { word += get_char(); col_global++; 
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-            tokens.push_back(token(tokens_list[word]));}
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+            tokens.push_back(token(tokens_list[word], word));}
         }
         else if (letter == '\\') {
             if (peek_char() == 'n') {
@@ -248,11 +245,11 @@ void scanner(char* buffer) {
                 col_global++;
                 word += get_char();
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
             else {
-                cout << "falta ponerle algo mas al \\ no querras decir \\n?" << " linea :" << line_global << " columna: " << col_global << endl;
+                // cout << "falta ponerle algo mas al \\ no querras decir \\n?" << " linea :" << line_global << " columna: " << col_global << endl;
             }
         }
 
@@ -262,14 +259,14 @@ void scanner(char* buffer) {
                 col_global++;
                 word += get_char();
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
             else {
                 word += get_char();
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
         }
 
@@ -288,74 +285,74 @@ void scanner(char* buffer) {
                 word += get_char();
                 col_global++;
                 if (valid_identifier) {
-                    cout << word << " TOKEN_Num" << endl;
+                    // cout << word << " TOKEN_Num" << endl;
                 }
                 else {
-                    cout << "Error: Número invalido '" << word << " linea :" << line_global << " columna: " << col_global << endl;
+                    // cout << "Error: Número invalido '" << word << " linea :" << line_global << " columna: " << col_global << endl;
                 }
             }
             else {
                 word += get_char();
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
         }
         else if (letter == '[') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
 
         else if (letter == ']') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
         else if (letter == '(') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
 
         else if (letter == ')') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
         else if (letter == '{') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
         else if (letter == '}') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
         else if (letter == '^') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
         else if (letter == '*') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
         else if (letter == '%') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
         else if (letter == '<') {
             
@@ -364,15 +361,15 @@ void scanner(char* buffer) {
                 word += get_char();
                 col_global++;
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
             else
             {
                 word += get_char();
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
         }
         else if (letter == '>') {
@@ -382,15 +379,15 @@ void scanner(char* buffer) {
                 word += get_char();
                 col_global++;
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
             else
             {
                 word += get_char();
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
         }
         else if (letter == '!') {
@@ -401,15 +398,15 @@ void scanner(char* buffer) {
                 word += get_char();
                 col_global++;
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
             else
             {
                 word += get_char();
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
         }
         else if (letter == '=') {
@@ -419,15 +416,15 @@ void scanner(char* buffer) {
                 word += get_char();
                 col_global++;
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
             else
             {
                 word += get_char();
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
         }
         else if (letter == '&') {
@@ -437,14 +434,14 @@ void scanner(char* buffer) {
                 word += get_char();
                 col_global++;
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
             else
             {
                 word += get_char();
                 col_global++;
-                cout << "No querras decir && en lugar de " << word << "?" << " linea :" << line_global << " columna: " << col_global << endl;
+                // cout << "No querras decir && en lugar de " << word << "?" << " linea :" << line_global << " columna: " << col_global << endl;
             }
         }
 
@@ -454,35 +451,35 @@ void scanner(char* buffer) {
                 word += get_char();
                 col_global++;
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
             else
             {
                 word += get_char();
                 col_global++;
-                cout << "No querras decir || en lugar de" << word << "?" << " linea :" << line_global << " columna: " << col_global << endl;
+                // cout << "No querras decir || en lugar de" << word << "?" << " linea :" << line_global << " columna: " << col_global << endl;
             }
         }
 
         else if (letter == ';') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
 
         else if (letter == ':') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
         else if (letter == '\'') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
         else if (letter == '\"') {
             word += get_char();  
@@ -493,26 +490,26 @@ void scanner(char* buffer) {
                 col_global++;
             }
             if (peek_actual_char() == '\"') {
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list["\""]<< endl;
-                tokens.push_back(token(tokens_list["\""]));
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<"TOKEN_Text_string"<< endl;
-                tokens.push_back(token("TOKEN_Text_string"));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list["\""]<< endl;
+                tokens.push_back(token(tokens_list["\""],word));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<"TOKEN_Text_string"<< endl;
+                tokens.push_back(token("TOKEN_Text_string",word));
                 
                 word = "";
                 word += get_char();
                 col_global++;
-                cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+                // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
             }
             else {
-                cout << "Error: String sin cerrar '" << word << "'" << " linea :" << line_global << " columna: " << col_global << endl;
+                // cout << "Error: String sin cerrar '" << word << "'" << " linea :" << line_global << " columna: " << col_global << endl;
             }
         }
         else if (letter == ',') {
             word += get_char();
             col_global++;
-            cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
-                tokens.push_back(token(tokens_list[word]));
+            // cout <<"Linea "<<line_global<<" Col "<<col_global<<"\t"<<tokens_list[word]<< endl;
+                tokens.push_back(token(tokens_list[word], word));
         }
 
     }

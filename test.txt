@@ -1,0 +1,126 @@
+
+int x = 10;        
+bool b = true;
+string s = "hola mundo!";
+
+/* Declaracion de
+  Variables */
+int x;  
+void[][][] data =arr+2; 
+/* Expresiones
+  Aritmeticas */
+
+int z = x + 5 - 3 * 2;
+int z = (4 + y) / 2;
+
+/* Expresiones
+  Relacionales */
+
+bool a = x < 10;
+bool b = y >= z;
+bool c = z == 5;
+
+/* Expresiones
+  Booleanas */
+bool a = true && false;        // AND lógico.
+bool b = x < 5 || y > 10;      // OR lógico con relacionales.
+bool c = (x == 3);            // Negación lógica.
+
+/* Otros 
+  Statements */
+
+[bool Respuesta (){
+if (y < 10){print("Both conditions met.");}
+else {return true;}
+}]
+
+[bool Respuesta (){
+if (y < 10){print("Both conditions met.");{if (x == 1){return false;} } }
+else { int x = 0; return true;}
+}]
+[void MiFuncion() {
+    int i;
+    for (i = 0; i < 10; i = i + 1;) {
+        print("Reached middle.");
+
+        if (i == 5) { // test comment
+            print("Reached middle.");
+            int x = chega("hola" 1 2 3 );
+            int y = -- 1;
+        }
+    }
+}]
+
+            int x = chega("hola");
+
+
+
+/* Declaracion de
+  Variables */
+int x;  // IntType Identifier ;
+int[] arr = "a";  // IntType [ ] Identifier = CharLiteral ;
+char[][][] cube;  // CharType [ ] [ ] [ ] Identifier ;
+void[][] data = a + 5; 
+
+
+
+
+
+
+
+
+
+
+
+map<string, string> tokens_list = {
+    pair<string,string>("bool","TOKEN_BoolType"),
+    pair<string,string>("char","TOKEN_CharType"),
+    pair<string,string>("array","TOKEN_ARRAY"), //
+    pair<string,string>("else","TOKEN_else"),
+    pair<string,string>("false","TOKEN_False"),
+    pair<string,string>("for","TOKEN_for"),
+    pair<string,string>("function","TOKEN_FUNCTION"), //
+    pair<string,string>("if","TOKEN_if"),
+    pair<string,string>("int","TOKEN_IntType"),
+    pair<string,string>("print","TOKEN_print"),
+    pair<string,string>("return","TOKEN_return"),
+    pair<string,string>("string","TOKEN_StringType"),
+    pair<string,string>("true","TOKEN_True"),
+    pair<string,string>("void","TOKEN_VoidType"),
+    pair<string,string>("while","TOKEN_WHILE"), //
+
+    pair<string,string>("[","TOKEN_CorA"),
+    pair<string,string>("]","TOKEN_CorC"),
+    pair<string,string>("(","TOKEN_ParA"),
+    pair<string,string>(")","TOKEN_ParC"),
+    pair<string,string>("++","TOKEN_++"), //
+    pair<string,string>("--","TOKEN_--"), //
+    pair<string,string>("-","TOKEN_menos"),
+    pair<string,string>("!","TOKEN_excla"),
+    pair<string,string>("^","TOKEN_pow"), //
+    pair<string,string>("*","TOKEN_mult"),
+    pair<string,string>("/","TOKEN_div"),
+    pair<string,string>("%","TOKEN_mod"),
+    pair<string,string>("+","TOKEN_mas"),
+    pair<string,string>("<","TOKEN_menora"),
+    pair<string,string>("<=","TOKEN_menorigual"),
+    pair<string,string>(">","TOKEN_mayora"),
+    pair<string,string>(">=","TOKEN_mayorigual"),
+    pair<string,string>("==","TOKEN_igual"),
+    pair<string,string>("\\n","TOKEN_newline"), //
+    pair<string,string>("!=","TOKEN_noigual"),
+    pair<string,string>("=","TOKEN_decl"),
+    pair<string,string>("&&","TOKEN_and"),
+    pair<string,string>("||","TOKEN_or"),
+    pair<string,string>(";","TOKEN_punto_coma"),
+    pair<string,string>("\'","TOKEN_Comilla"),
+    pair<string,string>("\"","TOKEN_Comilla_doble"),
+    pair<string,string>(",","TOKEN_coma"),
+    pair<string,string>("//","TOKEN_COMLINE"),
+    pair<string,string>("{","TOKEN_llavea"),
+    pair<string,string>("}","TOKEN_llavec"),
+    pair<string,string>(":","TOKEN_doblepunto"),
+    pair<string,string>("/*","TOKEN_COMBLOCKS"), //COMMENT BLOCK START
+    pair<string,string>("*/","TOKEN_COMBLOCKE"), //   ''    ''   END
+
+};
